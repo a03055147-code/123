@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>What's in Your Hand?｜結果</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#ffffff; --text:#3b3f44; --muted:#6b7076;
+      --pill:#bfefff; --pill-hover:#a8e6ff;
+      --chip:#e9f8ff;
+    }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:"Manrope","Noto Sans TC",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;display:flex;align-items:center;justify-content:center}
+    .stage{width:1366px;height:1024px;position:relative}
+
+    .grid{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;align-items:center;padding:0 80px;gap:40px}
+
+    /* 左：手語動態視覺圖（佔位） */
+    .visual{
+      width:480px;height:640px;margin:0 auto;border-radius:999px;border:2px solid #bdbdbd;display:flex;align-items:center;justify-content:center;color:#4b4f53;font-weight:800
+    }
+
+    /* 右：結果內容 */
+    .right{text-align:center}
+    .hello{font:800 16px "Manrope",sans-serif;color:var(--muted);letter-spacing:.2px;margin-bottom:10px}
+    .title{font-weight:900;font-size:88px;margin:10px 0 28px}
+    .title small{display:block;font:800 18px "Manrope",sans-serif;color:var(--muted);letter-spacing:.4px;margin-bottom:6px}
+
+    .card{display:inline-flex;flex-direction:column;gap:18px;align-items:center;justify-content:center;background:var(--pill);padding:26px 30px;border-radius:26px;box-shadow:0 10px 0 rgba(0,0,0,.1), 0 16px 36px rgba(0,0,0,.08);min-width:520px}
+    .card p{margin:0 0 6px;font-weight:900}
+    .btns{display:flex;gap:18px}
+    .btn{display:inline-block;padding:14px 24px;border-radius:18px;background:#fff;text-decoration:none;color:#2a2f33;font-weight:900;box-shadow:0 4px 0 rgba(0,0,0,.1);transition:transform .08s ease, box-shadow .15s ease, background .15s ease}
+    .btn:hover{transform:translateY(-1px);box-shadow:0 6px 0 rgba(0,0,0,.12)}
+    .btn:active{transform:translateY(1px);box-shadow:0 3px 0 rgba(0,0,0,.1)}
+
+    .fit{transform-origin:top left}
+    @media (max-width:1366px),(max-height:1024px){ body{align-items:flex-start} .outer{width:100vw;height:100vh;overflow:auto;display:grid;place-items:center;padding:16px} .fit{transform:scale(calc(min(100vw/1366,100vh/1024)))}}
+  </style>
+</head>
+<body>
+  <div class="outer">
+    <div class="stage fit">
+      <div class="grid">
+        <div class="visual">手語動態視覺圖</div>
+        <div class="right">
+          <div class="hello" id="hello">你好！</div>
+          <div class="title" id="resultTitle"><small>經過這次的旅程，我覺得你的手語名字可以叫</small>——</div>
+          <div class="card">
+            <p>為了留下美好的回憶，我們去拍拍貼機吧！</p>
+            <div class="btns">
+              <a class="btn" id="restart" href="index.html">我想再冒險一次！</a>
+              <a class="btn" id="booth" href="booth-preview.html">去拍貼</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 讀玩家基本資料（page3 建議寫入 localStorage.handname_player）
+    const urlp = new URLSearchParams(location.search);
+    const stored = JSON.parse(localStorage.getItem('handname_player')||'{}');
+    const player = {
+      name: urlp.get('name') || stored.name || '旅人',
+      gender: urlp.get('gender') || stored.gender || ''
+    };
+    if(!stored.name && (urlp.get('name')||urlp.get('gender'))){
+      localStorage.setItem('handname_player', JSON.stringify(player));
+    }
+
+    // 第一階段總類型
+    const baseScores = JSON.parse(localStorage.getItem('handname_scores')||'{}');
+    const types = {extravert:'外向活力', introvert:'內向安靜', decisive:'果斷堅強', analytic:'敏銳理性', caring:'關懷溫暖'};
+    let bestTypeKey = 'extravert', bestVal = -Infinity;
+    Object.keys(types).forEach(k=>{ const v = baseScores[k]||0; if(v>bestVal){bestVal=v;bestTypeKey=k;} });
+
+    // 第二階段細分特質
+    const stage2 = JSON.parse(localStorage.getItem('handname_stage2')||'{}');
+    // 只取屬於 bestType 的 key，例如 extravert:活潑
+    let topLabel = '' , topScore = -Infinity;
+    Object.entries(stage2).forEach(([k,v])=>{
+      if(k.startsWith(bestTypeKey+':')){
+        const label = k.split(':')[1];
+        if(v>topScore){ topScore=v; topLabel=label; }
+      }
+    });
+
+    // 生成稱號（若沒有第二階段紀錄就用大類型）
+    const genderMap = {male:'男', female:'女'};
+    const gSuffix = genderMap[player.gender] || '';
+    const titleWord = (topLabel || types[bestTypeKey] || '旅人') + gSuffix;
+
+    // 注入到畫面
+    document.getElementById('hello').textContent = `${player.name}！`;
+    const t = document.getElementById('resultTitle');
+    t.innerHTML = `<small>經過這次的旅程，我覺得你的手語名字可以叫</small>${titleWord}`;
+
+    // 重新開始：清除分數
+    document.getElementById('restart').addEventListener('click', (e)=>{
+      // 可改成導回封面後重置
+      localStorage.removeItem('handname_scores');
+      localStorage.removeItem('handname_stage2');
+    });
+
+    // 去拍貼：先把這次要用的模板存起來（目前強制「自信女」）
+document.getElementById('booth').addEventListener('click', ()=>{
+  localStorage.setItem('photobooth_template', JSON.stringify({
+    role: '自信女',
+    image: '心理測驗模板.jpg', // 與 booth-preview.html 使用的檔名一致
+    chosen: 'A'              // 若模板有 A/B 版，預設 A；可在預覽頁切換
+  }));
+});
+  </script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>拍貼｜iPad 版本（合照模式）</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --text:#3b3f44;
+}
+html,body{
+  height:100%;margin:0;padding:0;
+  background:#000;
+  font-family:"Noto Sans TC","Manrope",sans-serif;
+  color:var(--text);
+  touch-action:none; /* 防止iPad滑動畫面 */
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
+}
+.stage{
+  position:relative;
+  width:100vw;
+  height:100vh;
+  overflow:hidden;
+  background:#000;
+}
+video,canvas{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+video{
+  transform:scaleX(-1); /* 鏡像預覽 */
+}
+.char{
+  position:absolute;
+  left:5vw;
+  bottom:2vh;
+  width:35vw;
+  pointer-events:none;
+  filter:drop-shadow(0 8px 24px rgba(0,0,0,.25));
+}
+.badge{
+  position:absolute;
+  top:2vh;
+  left:3vw;
+  background:rgba(255,255,255,.8);
+  color:#000;
+  font-weight:800;
+  border-radius:999px;
+  padding:8px 16px;
+  font-size:16px;
+}
+.tip{
+  position:absolute;
+  top:8vh;
+  left:3vw;
+  color:#fff;
+  font-size:32px;
+  font-weight:900;
+  text-shadow:0 3px 16px rgba(0,0,0,.5);
+  width:90vw;
+  line-height:1.4;
+}
+.countdown{
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  font-weight:900;
+  font-size:140px;
+  color:#fff;
+  text-shadow:0 10px 40px rgba(0,0,0,.45);
+  opacity:0;
+  transition:opacity .2s ease;
+  pointer-events:none;
+}
+.flash{
+  position:absolute;
+  inset:0;
+  background:#fff;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .12s ease;
+}
+.show{opacity:1;}
+.startBtn{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#000;
+  background:rgba(255,255,255,.9);
+  font-weight:900;
+  font-size:28px;
+  border:none;
+  border-radius:12px;
+  width:40vw;
+  height:15vh;
+  margin:auto;
+  cursor:pointer;
+}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <video id="video" playsinline autoplay muted></video>
+  <canvas id="canvas" width="1920" height="1080" style="display:none"></canvas>
+  <img id="char" class="char" src="動作1.png" alt="角色">
+  <div class="badge">iPad 模式</div>
+  <div class="tip" id="tip">請和角色一起擺出 <strong>動作 1</strong></div>
+  <div id="cd" class="countdown">3</div>
+  <div id="flash" class="flash"></div>
+  <button id="startBtn" class="startBtn">📸 開始拍攝</button>
+</div>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const charImg = document.getElementById('char');
+const tip = document.getElementById('tip');
+const cd = document.getElementById('cd');
+const flash = document.getElementById('flash');
+const startBtn = document.getElementById('startBtn');
+
+let stream = null;
+let step = 0;
+const shots = { one:null, two:null };
+const poses = [
+  { img:'動作1.png', label:'動作 1' },
+  { img:'動作2.png', label:'動作 2' }
+];
+
+async function startCamera(){
+  try{
+    if(stream) stream.getTracks().forEach(t=>t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:'user', width:{ideal:1280}, height:{ideal:720} },
+      audio:false
+    });
+    video.srcObject = stream;
+  }catch(e){
+    alert('無法開啟相機：'+ e.message);
+  }
+}
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+async function countdown(){
+  for(let n=3;n>=1;n--){
+    cd.textContent = n;
+    cd.classList.add('show');
+    await sleep(900);
+    cd.classList.remove('show');
+    await sleep(100);
+  }
+}
+
+function capture(){
+  const vw=video.videoWidth,vh=video.videoHeight;
+  if(!vw||!vh)return null;
+  canvas.width=vw;canvas.height=vh;
+  const ctx=canvas.getContext('2d');
+  ctx.save();
+  ctx.translate(canvas.width,0);
+  ctx.scale(-1,1);
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  ctx.restore();
+  // 畫角色圖（固定比例左下）
+  const img=charImg;
+  const dw=canvas.width*0.35; // 角色寬度比例
+  const dh=img.naturalHeight*(dw/img.naturalWidth);
+  const dx=canvas.width*0.05;
+  const dy=canvas.height - dh - canvas.height*0.02;
+  ctx.save();
+  ctx.translate(canvas.width,0);
+  ctx.scale(-1,1);
+  ctx.drawImage(img,dx,dy,dw,dh);
+  ctx.restore();
+  flash.classList.add('show');
+  setTimeout(()=>flash.classList.remove('show'),120);
+  return canvas.toDataURL('image/jpeg',0.9);
+}
+
+async function shootSequence(){
+  startBtn.style.display='none';
+  // 第一張
+  tip.innerHTML='請和角色一起擺出 <strong>動作 1</strong>';
+  await countdown();
+  shots.one=capture();
+
+  // 換角色圖
+  charImg.src=poses[1].img;
+  await sleep(400);
+  tip.innerHTML='請和角色一起擺出 <strong>動作 2</strong>';
+  await countdown();
+  shots.two=capture();
+
+  // 存結果並導向
+  localStorage.setItem('photobooth_shots',JSON.stringify(shots));
+  window.location.href='booth-export.html';
+}
+
+startBtn.addEventListener('click',async()=>{
+  await startCamera(); // 必須由觸發啟動
+  await sleep(300);
+  shootSequence();
+});
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden && stream){
+    stream.getTracks().forEach(t=>t.stop());
+  }
+});
+</script>
+</body>
+</html>
